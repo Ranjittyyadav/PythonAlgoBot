@@ -7,7 +7,8 @@ from pathlib import Path
 
 # Exchange configuration
 EXCHANGE_NAME = os.getenv("EXCHANGE_NAME", "delta")
-SYMBOL = os.getenv("SYMBOL", "BTCUSDT")
+# Default symbol aligned with Delta testnet template (BTCUSD perpetual)
+SYMBOL = os.getenv("SYMBOL", "BTCUSD")
 INTERVAL = os.getenv("INTERVAL", "5m")
 CANDLE_COUNT = int(os.getenv("CANDLE_COUNT", "100"))
 
@@ -24,8 +25,8 @@ CHART_IMAGE_DIR = os.getenv("CHART_IMAGE_DIR", "chart_images")
 # Delta Exchange configuration (default: demo/testnet mode)
 # IMPORTANT: Update these with your actual Delta Exchange demo account API keys
 # Get them from: Delta Exchange → API Management
-DELTA_API_KEY = os.getenv("DELTA_API_KEY", "3TzRAaf8DyKhWNsLKzK8S7Cmt0F3Ds")
-DELTA_API_SECRET = os.getenv("DELTA_API_SECRET", "54AxJa9oHnCLdufzjZO9bdFNjnp3e9kLMa3OKwojrmQcOlkNM7BMnGpi0zSL")
+DELTA_API_KEY = os.getenv("DELTA_API_KEY", "rC9EH0b8wn3t4qQ3bSV92UFigGBLvj")
+DELTA_API_SECRET = os.getenv("DELTA_API_SECRET", "uxFMd4UIwOy5ifxyYgWnZhZPfnbzfhSq1ZsMebXtfFycowWTDp1RyfhDcvcc")
 DELTA_TESTNET = os.getenv("DELTA_TESTNET", "true").lower() == "true"  # Default to demo/testnet
 
 # Logging

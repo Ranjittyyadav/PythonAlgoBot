@@ -145,14 +145,12 @@ class DeltaAPI(CryptoExchangeAPI):
             # Delta Exchange uses Unix timestamp in seconds (as string)
             timestamp = str(int(time.time()))
             
-            # Prepare body for signature
-            if json_data:
+            # Prepare body for signature (payload string exactly as sent)
+            if json_data and method == 'POST':
                 import json
                 body = json.dumps(json_data, separators=(',', ':'))
-            elif method == 'GET':
-                # For GET requests, body is empty in signature (even if params exist)
-                body = ""
             else:
+                # For GET or POST without body, body is empty in signature
                 body = ""
             
             # Build query string for signature (params are still passed separately)
@@ -195,9 +193,14 @@ class DeltaAPI(CryptoExchangeAPI):
         
         try:
             if method == 'GET':
+                # For signed GET, params are included in both query_string (for signature) and params for requests
                 response = requests.get(url, params=params, headers=headers, timeout=10)
             elif method == 'POST':
-                response = requests.post(url, json=json_data, params=params, headers=headers, timeout=10)
+                if signed:
+                    # Use the exact payload string we signed as the request body
+                    response = requests.post(url, data=body, params=params, headers=headers, timeout=10)
+                else:
+                    response = requests.post(url, json=json_data, params=params, headers=headers, timeout=10)
             else:
                 raise ValueError(f"Unsupported HTTP method: {method}")
             
@@ -399,7 +402,17 @@ class DeltaAPI(CryptoExchangeAPI):
             
             # Search for the asset
             for balance in balances_list:
-                # Try different ways to match the asset
+                # --- Format used in deltaExchangeTemplate.py ---
+                # Example wallet item: {'asset_symbol': 'USD', 'available_balance': '1000.0', ...}
+                asset_symbol = balance.get('asset_symbol')
+                if asset_symbol and asset_symbol.upper() == asset.upper():
+                    available = balance.get('available_balance') or balance.get('available') or balance.get('balance', 0)
+                    if available is not None:
+                        result = float(available)
+                        logger.debug(f"Found {asset} balance (asset_symbol): {result}")
+                        return result
+
+                # --- Other possible formats (nested asset dict, etc.) ---
                 asset_symbol = None
                 asset_id = None
                 
@@ -419,11 +432,10 @@ class DeltaAPI(CryptoExchangeAPI):
                 # Match by symbol or asset_id
                 if (asset_symbol and asset_symbol.upper() == asset.upper()) or \
                    (asset_id and str(asset_id) == asset):
-                    # Try different balance field names
                     available = balance.get('available', balance.get('available_balance', balance.get('balance', 0)))
                     if available:
                         result = float(available)
-                        logger.debug(f"Found {asset} balance: {result}")
+                        logger.debug(f"Found {asset} balance (generic): {result}")
                         return result
             
             # If not found, log all available assets for debugging

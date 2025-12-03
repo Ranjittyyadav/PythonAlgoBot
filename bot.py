@@ -84,7 +84,10 @@ class CryptoTradingBot:
         Returns:
             Position size in base currency
         """
-        balance = self.exchange_api.get_account_balance("USDT")
+        # On Delta, BTCUSD perpetuals are typically margined in USD, not USDT.
+        # If you are using BTCUSD, we query USD balance; otherwise default to USDT.
+        risk_asset = "USD" if self.symbol.endswith("USD") else "USDT"
+        balance = self.exchange_api.get_account_balance(risk_asset)
         risk_amount = balance * self.risk_percent
         
         # Calculate stop loss price
@@ -97,7 +100,11 @@ class CryptoTradingBot:
         
         position_size = risk_amount / price_diff
         
-        logger.info(f"Balance: {balance:.2f} USDT, Risk: {risk_amount:.2f} USDT, Position size: {position_size:.6f}")
+        logger.info(
+            f"Balance: {balance:.2f} {risk_asset}, "
+            f"Risk: {risk_amount:.2f} {risk_asset}, "
+            f"Position size: {position_size:.6f}"
+        )
         return position_size
     
     def calculate_stop_loss_price(self, candles: list, entry_price: float) -> float:
