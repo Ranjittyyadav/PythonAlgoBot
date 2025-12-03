@@ -47,11 +47,14 @@ class DeltaAPI(CryptoExchangeAPI):
         # Delta Exchange API base URL
         # For demo/testnet accounts, use testnet API endpoint
         if self.testnet:
-            # Use testnet API endpoint for demo accounts
-            self.base_url = "https://testnet-api.delta.exchange"
+            # Testnet endpoint (India cluster)
+            # Ref: cdn-ind.testnet.deltaex.org
+            self.base_url = "https://cdn-ind.testnet.deltaex.org"
             self.demo_url = None
         else:
-            self.base_url = "https://api.delta.exchange"
+            # Production endpoint (India cluster)
+            # Ref: api.india.delta.exchange
+            self.base_url = "https://api.india.delta.exchange"
             self.demo_url = None
         
         logger.info(f"Initialized DeltaAPI (testnet={self.testnet}, base_url={self.base_url})")
@@ -61,12 +64,15 @@ class DeltaAPI(CryptoExchangeAPI):
         timestamp: str, 
         method: str, 
         path: str, 
-        body: str = ""
+        body: str = "",
+        query_string: str = ""
     ) -> str:
         """
         Generate HMAC SHA256 signature for authenticated requests.
         
-        Delta Exchange signature format: METHOD + PATH + TIMESTAMP + BODY
+        Expected signature format (based on Delta examples):
+            METHOD + TIMESTAMP + PATH + QUERY_STRING + BODY
+        where QUERY_STRING is either "" or starts with "?" (e.g. "?a=1&b=2").
         The API secret should be used directly (not base64 decoded).
         """
         import json
@@ -75,8 +81,11 @@ class DeltaAPI(CryptoExchangeAPI):
         elif not isinstance(body, str):
             body = str(body) if body else ""
         
-        # Construct message: METHOD + PATH + TIMESTAMP + BODY
-        message = f"{method}{path}{timestamp}{body}"
+        if not isinstance(query_string, str):
+            query_string = str(query_string) if query_string else ""
+        
+        # Construct message: METHOD + TIMESTAMP + PATH + QUERY_STRING + BODY
+        message = f"{method}{timestamp}{path}{query_string}{body}"
         
         # Generate HMAC SHA256 signature
         signature = hmac.new(
@@ -84,6 +93,18 @@ class DeltaAPI(CryptoExchangeAPI):
             message.encode('utf-8'),
             hashlib.sha256
         ).hexdigest()
+        
+        # Debug logging for signature building (without exposing secret)
+        logger.debug(
+            "Delta signature | method=%s timestamp=%s path=%s query_string=%s body=%s message=%s signature=%s",
+            method,
+            timestamp,
+            path,
+            query_string,
+            body,
+            message,
+            signature,
+        )
         
         return signature
     
@@ -113,10 +134,13 @@ class DeltaAPI(CryptoExchangeAPI):
         
         url = f"{self.base_url}{endpoint}"
         headers = {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            # Required to avoid 4XX errors on some setups
+            'User-Agent': 'python-rest-client'
         }
         
         body = ""
+        query_string = ""
         if signed:
             # Delta Exchange uses Unix timestamp in seconds (as string)
             timestamp = str(int(time.time()))
@@ -131,8 +155,21 @@ class DeltaAPI(CryptoExchangeAPI):
             else:
                 body = ""
             
+            # Build query string for signature (params are still passed separately)
+            if params:
+                # Format must be '?param1=value1&param2=value2'
+                query_string = '?' + urlencode(params, doseq=True)
+            else:
+                query_string = ""
+            
             # Generate signature
-            signature = self._generate_signature(timestamp, method, endpoint, body)
+            signature = self._generate_signature(
+                timestamp=timestamp,
+                method=method,
+                path=endpoint,
+                body=body,
+                query_string=query_string,
+            )
             
             # Set authentication headers
             headers.update({
@@ -143,7 +180,18 @@ class DeltaAPI(CryptoExchangeAPI):
             
             # Debug logging (only if API key is set)
             if self.api_key:
-                logger.debug(f"Auth headers set for {method} {endpoint}")
+                logger.debug(
+                    "Delta request | method=%s url=%s endpoint=%s params=%s "
+                    "timestamp=%s query_string=%s body=%s headers=%s",
+                    method,
+                    url,
+                    endpoint,
+                    params,
+                    timestamp,
+                    query_string,
+                    body,
+                    {k: v for k, v in headers.items() if k.lower() != 'api-key'},
+                )
         
         try:
             if method == 'GET':
